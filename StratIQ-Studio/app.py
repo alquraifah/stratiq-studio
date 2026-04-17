@@ -102,32 +102,29 @@ def fetch_indicator_series(country_code: str, indicator_code: str, start_year: i
         f"https://api.worldbank.org/v2/country/{country_code}/indicator/{indicator_code}"
         f"?format=json&per_page=200&date={start_year}:{end_year}"
     )
+
     try:
-        response = requests.get(url, timeout=60)
+        response = requests.get(url, timeout=20)
         response.raise_for_status()
         payload = response.json()
-    except requests.exceptions.Timeout:
-        return pd.DataFrame(columns=["year", "value"])
-    except requests.exceptions.RequestException:
-        return pd.DataFrame(columns=["year", "value"])
-    except (ValueError, KeyError):
-        return pd.DataFrame(columns=["year", "value"])
 
-    if not isinstance(payload, list) or len(payload) < 2 or payload[1] is None:
-        return pd.DataFrame(columns=["year", "value"])
+        if not isinstance(payload, list) or len(payload) < 2 or payload[1] is None:
+            return pd.DataFrame(columns=["year", "value"])
 
-    rows = []
-    for item in payload[1]:
-        try:
+        rows = []
+        for item in payload[1]:
             value = item.get("value")
             date = item.get("date")
             if value is not None and date is not None:
                 rows.append({"year": int(date), "value": float(value)})
-        except (TypeError, ValueError):
-            continue
 
-    df = pd.DataFrame(rows).sort_values("year") if rows else pd.DataFrame(columns=["year", "value"])
-    return df
+        if not rows:
+            return pd.DataFrame(columns=["year", "value"])
+
+        return pd.DataFrame(rows).sort_values("year")
+
+    except Exception:
+        return pd.DataFrame(columns=["year", "value"])
 
 
 @st.cache_data(show_spinner=False, ttl=3600)
@@ -289,9 +286,25 @@ if not industry.strip():
 
 country_code = COUNTRY_MAP[region]
 
+_FALLBACK_BRIEF = {
+    "score": 50,
+    "summary": "The live data source is temporarily unavailable. The app is running in fallback mode.",
+    "strengths": ["App deployed successfully", "Fallback mode is active", "Core interface is available"],
+    "opportunities": ["Reconnect live data", "Add cached snapshots", "Improve resilience"],
+    "risks": ["External API timeout", "Data source instability", "Cold-start delays"],
+    "sources": ["Fallback mode"],
+}
+
 with st.spinner("Pulling real indicators and building the brief..."):
-    snapshot = fetch_market_snapshot(country_code)
-    brief = build_ai_brief(industry, region, company_type, horizon, snapshot)
+    try:
+        snapshot = fetch_market_snapshot(country_code)
+    except Exception:
+        snapshot = {name: pd.DataFrame(columns=["year", "value"]) for name in INDICATORS.keys()}
+
+    try:
+        brief = build_ai_brief(industry, region, company_type, horizon, snapshot)
+    except Exception:
+        brief = _FALLBACK_BRIEF
 
 
 gdp = latest_value(snapshot["GDP (current US$)"])
