@@ -1,6 +1,6 @@
 # StratIQ Studio
 
-**Professional Market Intelligence Platform**
+** Market Intelligence Platform**
 
 StratIQ Studio is a web-based platform that delivers comprehensive market entry analysis — combining real-world economic data with advanced analytical frameworks to support strategic decision-making.
 
